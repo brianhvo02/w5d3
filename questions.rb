@@ -26,9 +26,24 @@ class User
     end
 
     def self.find_by_name(fname, lname)
-        users = QuestionsDatabase.instance.execute("SELECT * FROM users WHERE fname=#{fname} lname=#{lname};")
+        users = QuestionsDatabase.instance.execute("SELECT * FROM users WHERE fname='#{fname}' AND lname='#{lname}';")
         users.map { |hash| User.new(hash) }
     end
+
+    def authored_questions
+        #Called on a User, what questions have they written
+        Question.find_by_author_id(self.id)
+    end
+
+    def authored_replies 
+        Reply.find_by_user_id(self.id)
+    end
+
+    def followed_questions_for_user_id
+        QuestionFollow.followed_questions_for_user_id(self.id)
+    end
+
+
 end
 
 class Question
@@ -47,7 +62,7 @@ class Question
     end
 
     def self.find_by_title(title)
-        questions = QuestionsDatabase.instance.execute("SELECT * FROM questions WHERE title=#{title};")
+        questions = QuestionsDatabase.instance.execute("SELECT * FROM questions WHERE title='#{title}';")
         questions.map { |hash| Question.new(hash) }
     end
 
@@ -55,6 +70,20 @@ class Question
         questions = QuestionsDatabase.instance.execute("SELECT * FROM questions WHERE author_id=#{author_id};")
         questions.map { |hash| Question.new(hash) }
     end
+
+    def author
+        User.find_by_id(self.author_id)
+    end
+
+    def replies
+        Reply.find_by_question_id(self.id)
+    end
+
+    def followers
+        QuestionFollow.followers_for_question_id(self.id)
+    end
+
+
 end
 
 class Reply
@@ -82,6 +111,31 @@ class Reply
         replies = QuestionsDatabase.instance.execute("SELECT * FROM replies WHERE question_id=#{question_id};")
         replies.map { |hash| Reply.new(hash) }
     end
+
+    def self.find_by_parent_reply_id(parent_reply_id)
+        replies = QuestionsDatabase.instance.execute("SELECT * FROM replies WHERE parent_reply_id=#{parent_reply_id};")
+        replies.map { |hash| Reply.new(hash) }
+    end
+
+    def author
+        User.find_by_id(self.user_id)
+    end
+
+    def question 
+        Question.find_by_id(self.question_id)
+    end
+
+    def parent_reply 
+        return [] if self.parent_reply_id.nil?
+        Reply.find_by_id(self.parent_reply_id)
+    end
+
+    def child_replies
+        Reply.find_by_parent_reply_id(self.id)
+    end
+
+
+
 end
 
 class QuestionLike
@@ -98,4 +152,48 @@ class QuestionLike
         QuestionLike.new(question_likes.first)
     end
 end
+
+class QuestionFollow
+    attr_accessor :question_id, :user_id
+
+    def initialize(hash)
+        @question_id = hash['question_id']
+        @user_id = hash['user_id']
+    end
+
+    def self.followers_for_question_id(question_id)
+        #Will return an array of User objects
+        #Steps: Join on Users_ID, (1,Brian,V) (1,Ryder,A). Then select and initialize  
+        users = QuestionsDatabase.instance.execute(<<-SQL)
+        SELECT 
+            users.id, fname, lname
+        FROM
+            question_follows
+        JOIN 
+            users ON users.id = question_follows.user_id
+        WHERE
+        question_follows.question_id = '#{question_id}'
+        SQL
+        users.map {|hash| User.new(hash)}
+    end
+
+    def self.followed_questions_for_user_id(user_id)
+        #Will return an array of User objects
+        #Steps: Join on Users_ID, (1,Brian,V) (1,Ryder,A). Then select and initialize  
+        questions = QuestionsDatabase.instance.execute(<<-SQL)
+        SELECT 
+            questions.id, title, body, author_id
+        FROM
+            question_follows
+        JOIN 
+            questions ON questions.id = question_follows.question_id
+        WHERE
+        question_follows.user_id = '#{user_id}'
+        SQL
+        questions.map {|hash| Question.new(hash)}
+    end
+
+end 
+
+
 
