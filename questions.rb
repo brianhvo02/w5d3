@@ -61,6 +61,32 @@ class User
 
         arr.first['karma']
     end
+
+    def save
+        if self.id.nil?
+            QuestionsDatabase.instance.execute(<<-SQL, self.fname, self.lname)
+            INSERT INTO 
+                users (fname,lname)
+            VALUES
+                (?,?)
+            SQL
+            self.id = QuestionsDatabase.instance.last_insert_row_id 
+        else
+            QuestionsDatabase.instance.execute(<<-SQL, self.fname, self.lname, self.id)
+            UPDATE
+                users
+            SET
+                fname = ? ,    
+                lname = ? 
+            WHERE
+                id = ?
+            SQL
+        end
+        self.id
+
+    end
+            
+
 end
 
 class Question
@@ -115,6 +141,31 @@ class Question
     def most_liked(n)
         QuestionLike.most_liked_questions(n)
     end
+
+    def save
+        if self.id.nil?
+            QuestionsDatabase.instance.execute(<<-SQL, self.body, self.title, self.author_id)
+            INSERT INTO 
+                questions (body, title, author_id)
+            VALUES
+                (?,?,?)
+            SQL
+            self.id = QuestionsDatabase.instance.last_insert_row_id 
+        else
+            QuestionsDatabase.instance.execute(<<-SQL, self.body, self.title, self.author_id, self.id)
+            UPDATE
+                questions
+            SET
+                body = ? ,
+                title = ? ,    
+                author_id = ? 
+            WHERE
+                id = ?
+            SQL
+        end
+        self.id
+
+    end
 end
 
 class Reply
@@ -165,6 +216,31 @@ class Reply
         Reply.find_by_parent_reply_id(self.id)
     end
 
+    def save
+        if self.id.nil?
+            QuestionsDatabase.instance.execute(<<-SQL, self.body, self.question_id, self.user_id, self.parent_reply_id)
+            INSERT INTO 
+                replies (body,question_id,user_id,parent_reply_id)
+            VALUES
+                (?,?,?,?)
+            SQL
+            self.id = QuestionsDatabase.instance.last_insert_row_id 
+        else
+            QuestionsDatabase.instance.execute(<<-SQL, self.body, self.question_id, self.user_id, self.parent_reply_id, self.id)
+            UPDATE
+                replies
+            SET
+                body = ? ,
+                question_id = ? ,    
+                user_id = ?,
+                parent_reply_id = ?
+            WHERE
+                id = ?
+            SQL
+        end
+        self.id
+
+    end
 
 
 end
