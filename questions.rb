@@ -43,7 +43,24 @@ class User
         QuestionFollow.followed_questions_for_user_id(self.id)
     end
 
+    def liked_questions
+        QuestionLike.liked_questions_for_user_id(self.id)
+    end
 
+    def average_karma
+        arr = QuestionsDatabase.instance.execute(<<-SQL)
+            SELECT
+                CAST(COUNT(*) AS FLOAT) / COUNT(DISTINCT(question_id)) AS karma
+            FROM
+                questions
+            LEFT JOIN
+                question_likes ON question_likes.question_id = questions.id
+            WHERE
+                author_id = #{self.id}
+        SQL
+
+        arr.first['karma']
+    end
 end
 
 class Question
@@ -83,7 +100,21 @@ class Question
         QuestionFollow.followers_for_question_id(self.id)
     end
 
+    def self.most_followed(n)
+        QuestionFollow.most_followed_questions(n)
+    end
 
+    def likers
+        QuestionLike.likers_for_question_id(self.id)
+    end
+
+    def num_likes
+        QuestionLike.num_likes_for_question_id(self.id)
+    end
+
+    def most_liked(n)
+        QuestionLike.most_liked_questions(n)
+    end
 end
 
 class Reply
@@ -139,17 +170,69 @@ class Reply
 end
 
 class QuestionLike
-    attr_accessor :id, :user_id, :question_id
+    attr_accessor :user_id, :question_id
 
     def initialize(hash)
-        @id = hash['id']
         @user_id = hash['user_id']
         @question_id = hash['question_id']
     end
 
-    def self.find_by_id(id)
-        question_likes = QuestionsDatabase.instance.execute("SELECT * FROM question_likes WHERE id=#{id};")
-        QuestionLike.new(question_likes.first)
+    def self.likers_for_question_id(question_id)
+        users = QuestionsDatabase.instance.execute(<<-SQL)
+            SELECT
+                users.id, fname, lname
+            FROM
+                question_likes
+            JOIN
+                users ON question_likes.user_id = users.id
+            WHERE
+                question_id = #{question_id}
+        SQL
+        users.map {|hash| User.new(hash)}
+    end
+
+    def self.num_likes_for_question_id(question_id)
+        counts = QuestionsDatabase.instance.execute(<<-SQL)
+            SELECT
+                count(*) AS result
+            FROM
+                question_likes
+            WHERE
+                question_id = #{question_id}
+        SQL
+        counts.first['result']
+    end
+
+    def self.liked_questions_for_user_id(user_id)
+        questions = QuestionsDatabase.instance.execute(<<-SQL)
+            SELECT
+                questions.id, title, body, author_id
+            FROM
+                question_likes
+            JOIN
+                questions ON question_likes.question_id = questions.id
+            WHERE
+                user_id = #{user_id}
+        SQL
+        questions.map {|hash| Question.new(hash)}
+    end
+
+    def self.most_liked_questions(n)
+        questions = QuestionsDatabase.instance.execute(<<-SQL)
+            SELECT
+                questions.id, title, body, author_id
+            FROM
+                question_likes
+            JOIN
+                questions ON question_likes.question_id = questions.id
+            GROUP BY
+                question_id
+            ORDER BY
+                count(*)
+                DESC
+            LIMIT #{n}
+        SQL
+        questions.map {|hash| Question.new(hash)}
     end
 end
 
@@ -165,14 +248,14 @@ class QuestionFollow
         #Will return an array of User objects
         #Steps: Join on Users_ID, (1,Brian,V) (1,Ryder,A). Then select and initialize  
         users = QuestionsDatabase.instance.execute(<<-SQL)
-        SELECT 
-            users.id, fname, lname
-        FROM
-            question_follows
-        JOIN 
-            users ON users.id = question_follows.user_id
-        WHERE
-        question_follows.question_id = '#{question_id}'
+            SELECT 
+                users.id, fname, lname
+            FROM
+                question_follows
+            JOIN 
+                users ON users.id = question_follows.user_id
+            WHERE
+            question_follows.question_id = '#{question_id}'
         SQL
         users.map {|hash| User.new(hash)}
     end
@@ -181,18 +264,36 @@ class QuestionFollow
         #Will return an array of User objects
         #Steps: Join on Users_ID, (1,Brian,V) (1,Ryder,A). Then select and initialize  
         questions = QuestionsDatabase.instance.execute(<<-SQL)
-        SELECT 
-            questions.id, title, body, author_id
-        FROM
-            question_follows
-        JOIN 
-            questions ON questions.id = question_follows.question_id
-        WHERE
-        question_follows.user_id = '#{user_id}'
+            SELECT 
+                questions.id, title, body, author_id
+            FROM
+                question_follows
+            JOIN 
+                questions ON questions.id = question_follows.question_id
+            WHERE
+            question_follows.user_id = '#{user_id}'
         SQL
         questions.map {|hash| Question.new(hash)}
     end
 
+    def self.most_followed_questions(n)
+        # [ question, question ] most -> least followed
+        questions = QuestionsDatabase.instance.execute(<<-SQL)
+            SELECT
+                questions.id, title, body, author_id
+            FROM
+                question_follows
+            JOIN
+                questions ON question_follows.question_id = questions.id
+            GROUP BY
+                question_id
+            ORDER BY
+                count(*)
+                DESC
+            LIMIT #{n}
+        SQL
+        questions.map {|hash| Question.new(hash)}
+    end
 end 
 
 
